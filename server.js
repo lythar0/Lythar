@@ -1,7 +1,8 @@
 
 // /server.js
-// 🎯 GÜNCELLEME: "Güzel URL" sistemini (htaccess) atlatmak için
-// API yolu .php uzantılı dosya olarak değiştirildi.
+// 🎯 GÜNCELLEME: "Anlık gitmiyor" sorununu çözmek için,
+// "Santral" artık onarılmış, GÜVENLİ ve .php uzantılı
+// "Kapı Güvenliği" API'sine yönlendirildi.
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -14,8 +15,8 @@ const https = require('https');
 
 const PHP_SITE_URL = 'https://lythar.tr'; 
 
-// 🎯 DİKKAT: "Güzel URL" sistemini atlatmak için YENİ ADRES KULLANILIYOR
-const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/test_bypass.php`;
+// 🎯 DİKKAT: YOL GÜNCELLENDİ. Artık onarılmış, gerçek dosyayı çağırıyoruz.
+const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_membership.php`;
 
 // SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
 const unsafeHttpsAgent = new https.Agent({
@@ -24,8 +25,12 @@ const unsafeHttpsAgent = new https.Agent({
 // -----------------------------------------------------------------
 
 
+// ... (server.js dosyasının geri kalan kodları aynı) ...
+
+
 // RENDER SAĞLIK KONTROLÜ
 const server = http.createServer((req, res) => {
+// ... (Aynı) ...
     if (req.method === 'GET' && req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('Lythar Chat Santral Aktif. Socket.IO baglantisi bekleniyor.');
@@ -84,7 +89,7 @@ io.on('connection', (socket) => {
                 return socket.emit('authError', 'Gercersiz Grup ID formatı.');
             }
 
-            // 🎯 "Güzel URL" sistemini atlatmak için YENİ ADRES'e soruluyor
+            // 🎯 Artık onarılmış, GÜVENLİ dosyaya soruluyor
             console.log(`Yetki sorgulanıyor: Kullanıcı ${socket.userId}, Oda ${cleanGroupId} (Adres: ${PHP_AUTH_API_URL})`);
             
             const response = await axios.post(PHP_AUTH_API_URL, {
@@ -94,18 +99,16 @@ io.on('connection', (socket) => {
                 httpsAgent: unsafeHttpsAgent 
             });
 
-            // 🎯 Artık "response" cevabının GELMESİ LAZIM
             if (response.data.success && response.data.is_member) {
                 socket.join(cleanGroupId.toString());
                 // 🎯 BAŞARI BURADA OLMALI!
                 console.log(`Kullanıcı ${socket.userId}, ${cleanGroupId} odasına katıldı.`);
             } else {
-                // 🎯 (Bu test kodu 'false' dönemez, ama log burada kalsın)
-                console.warn(`Yetkisiz giriş reddedildi: Kullanıcı ${socket.userId}, Oda ${cleanGroupId}`);
+                // 🎯 Artık bu hatayı görmememiz lazım.
+                console.warn(`Yetkisiz giriş reddedildi: Kullanıcı ${socket.userId}, Oda ${cleanGroupId} (Sebep: ${response.data.message || 'API is_member=false dedi'})`);
                 socket.emit('authError', 'Bu odaya katılma yetkiniz yok.');
             }
         } catch (error) {
-            // 🎯 Eğer 404 veya 500 hatası alırsak, burada göreceğiz.
             console.error(`Odaya katılma hatası (PHP API [${PHP_AUTH_API_URL}] ile konuşulamadı):`, error.message);
             socket.emit('serverError', 'Sunucu hatası (API ile iletişim kurulamadı).');
         }
@@ -115,7 +118,7 @@ io.on('connection', (socket) => {
      * YAYIN İSTEĞİ
      */
     socket.on('yeniMesajYayinla', (messageData) => {
-        // ... (Bu kısımda değişiklik yok) ...
+        // ... (Değişiklik yok) ...
         try {
             if (!messageData || !messageData.grup_id) {
                 console.warn('Eksik mesaj verisi (grup_id) ile yayın isteği alındı.');
