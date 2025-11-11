@@ -1,13 +1,12 @@
 
 // /server.js
 // Lythar.tr "Santral" (Radyo Kulesi) Sunucusu
-// 🎯 GÜNCELLEME: "ilk sertifika doğrulanamadı" (SSL) hatasını atlamak için
-// 'rejectUnauthorized: false' eklendi.
+// 🎯 GÜNCELLEME: 'httpss' -> 'https' yazım hatası düzeltildi.
 
 const http = require('http');
 const { Server } = require('socket.io');
 const axios = require('axios'); // PHP API'mızla konuşmak için
-const https = require('httpss'); // 🎯 YENİ: HTTPS modülünü dahil et
+const https = require('https'); // 🎯 DÜZELTME: 'httpss' DEĞİL, 'https' OLACAK.
 
 // -----------------------------------------------------------------
 // 1. SUNUCU AYARLARI
@@ -16,10 +15,7 @@ const https = require('httpss'); // 🎯 YENİ: HTTPS modülünü dahil et
 const PHP_SITE_URL = 'https://lythar.tr'; 
 const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_membership`;
 
-// 🎯 YENİ: SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
-// Bu, 'ilk sertifika doğrulanamadı' hatasını çözecek.
-// DİKKAT: Bu, sunucular arası güvensizliği artırır,
-// ancak iki sunucu da (PHP/Node) size ait olduğu için kabul edilebilir.
+// 🎯 SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
 const unsafeHttpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
@@ -98,7 +94,7 @@ io.on('connection', (socket) => {
                 group_id: cleanGroupId
             }, {
                 // 2. İstek Ayarları (Config)
-                // 🎯 YENİ: "SSL sertifikan bozuk olsa bile devam et" ayarı
+                // "SSL sertifikan bozuk olsa bile devam et" ayarı
                 httpsAgent: unsafeHttpsAgent 
             });
 
@@ -111,8 +107,6 @@ io.on('connection', (socket) => {
             }
         } catch (error) {
             console.error(`Odaya katılma hatası (PHP API [${PHP_AUTH_API_URL}] ile konuşulamadı):`, error.message);
-            // 🎯 Hata mesajı hala aynı olabilir, ancak bu sefer NEDENİ farklıysa (örn 404)
-            // onu da burada göreceğiz.
             socket.emit('serverError', 'Sunucu hatası (API ile iletişim kurulamadı).');
         }
     });
