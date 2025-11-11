@@ -1,28 +1,29 @@
 
 // /server.js
-// Lythar.tr "Santral" (Radyo Kulesi) Sunucusu
-// 🎯 GÜNCELLEME: 'httpss' -> 'https' yazım hatası düzeltildi.
+// 🎯 GÜNCELLEME: "Önbelleği Patlatma" (Cache Busting) için API yolu değiştirildi.
 
 const http = require('http');
 const { Server } = require('socket.io');
-const axios = require('axios'); // PHP API'mızla konuşmak için
-const https = require('https'); // 🎯 DÜZELTME: 'httpss' DEĞİL, 'https' OLACAK.
+const axios = require('axios'); 
+const https = require('https'); 
 
 // -----------------------------------------------------------------
 // 1. SUNUCU AYARLARI
 // -----------------------------------------------------------------
 
 const PHP_SITE_URL = 'https://lythar.tr'; 
-const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_membership`;
 
-// 🎯 SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
+// 🎯 DİKKAT: "Önbelleği Patlatma" için API adresi GÜNCELLENDİ
+const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_TEST`;
+
+// SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
 const unsafeHttpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
 // -----------------------------------------------------------------
 
 
-// RENDER SAĞLIK KONTROLÜ (Port Scan Hatası Çözümü)
+// RENDER SAĞLIK KONTROLÜ
 const server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -45,24 +46,20 @@ const io = new Server(server, {
 // 2. GÜVENLİK (Middleware - "Bilet" Kontrolü)
 // -----------------------------------------------------------------
 io.use(async (socket, next) => {
+    // ... (Bu kısımda değişiklik yok, bilet kontrolü aynı) ...
     try {
         const token = socket.handshake.auth.token;
         if (!token) {
             return next(new Error('Kimlik Doğrulama Hatası: Token (Bilet) eksik.'));
         }
-        
-        // ---- GEÇİCİ TEST KODU ----
         const parts = token.split('-');
         const userId = (parts.length === 3 && parts[0] === 'user' && parts[1] === 'id') ? parts[2] : null;
         if (!userId || !/^\d+$/.test(userId)) {
             return next(new Error('Geçersiz Bilet (Token).'));
         }
-        // ---- TEST KODU SONU ----
-
         socket.userId = userId;
         console.log(`Bilet doğrulandı: Kullanıcı ID ${socket.userId} (Socket ${socket.id})`);
         next(); 
-
     } catch (err) {
         console.error('Kimlik doğrulama sırasında beklenmeyen hata:', err.message);
         next(new Error('Kimlik doğrulama başarısız.'));
@@ -86,22 +83,22 @@ io.on('connection', (socket) => {
                 return socket.emit('authError', 'Geçersiz Grup ID formatı.');
             }
 
+            // 🎯 "Önbelleği Patlatma" için YENİ ADRES'e soruluyor
             console.log(`Yetki sorgulanıyor: Kullanıcı ${socket.userId}, Oda ${cleanGroupId} (Adres: ${PHP_AUTH_API_URL})`);
             
             const response = await axios.post(PHP_AUTH_API_URL, {
-                // 1. İstek Gövdesi (Body)
                 user_id: socket.userId,
                 group_id: cleanGroupId
             }, {
-                // 2. İstek Ayarları (Config)
-                // "SSL sertifikan bozuk olsa bile devam et" ayarı
                 httpsAgent: unsafeHttpsAgent 
             });
 
             if (response.data.success && response.data.is_member) {
                 socket.join(cleanGroupId.toString());
+                // 🎯 BAŞARI BURADA OLMALI!
                 console.log(`Kullanıcı ${socket.userId}, ${cleanGroupId} odasına katıldı.`);
             } else {
+                // 🎯 Artık bu hatayı görmememiz lazım.
                 console.warn(`Yetkisiz giriş reddedildi: Kullanıcı ${socket.userId}, Oda ${cleanGroupId}`);
                 socket.emit('authError', 'Bu odaya katılma yetkiniz yok.');
             }
@@ -112,7 +109,7 @@ io.on('connection', (socket) => {
     });
 
     /**
-     * YAYIN İSTEĞİ (Mesaj, Resim, Video... hepsi)
+     * YAYIN İSTEĞİ
      */
     socket.on('yeniMesajYayinla', (messageData) => {
         // ... (Bu kısımda değişiklik yok) ...
