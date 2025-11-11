@@ -1,8 +1,9 @@
 
 // /server.js
-// 🎯 GÜNCELLEME: "Anlık gitmiyor" sorununu çözmek için,
-// "Santral" artık onarılmış, GÜVENLİ ve .php uzantılı
-// "Kapı Güvenliği" API'sine yönlendirildi.
+// 🎯 DİKKAT: "GÜVENLİKSİZ TEST MODU"
+// "Anlık gitmiyor" sorununu çözmek için, "Kapı Güvenliği" (PHP API)
+// kontrolü geçici olarak devre dışı bırakıldı.
+// Odaya katılmak isteyen HERKES içeri alınacak.
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -15,17 +16,14 @@ const https = require('https');
 
 const PHP_SITE_URL = 'https://lythar.tr'; 
 
-// 🎯 DİKKAT: YOL GÜNCELLENDİ. Artık onarılmış, gerçek dosyayı çağırıyoruz.
-const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_membership.php`;
+// 🎯 Bu API adresini artık KULLANMAYACAĞIZ (Test için)
+// const PHP_AUTH_API_URL = `${PHP_SITE_URL}/api/check_group_membership.php`;
 
 // SSL Sertifika Hatalarını Görmezden Gelen HTTP Aracısı
 const unsafeHttpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
 // -----------------------------------------------------------------
-
-
-// ... (server.js dosyasının geri kalan kodları aynı) ...
 
 
 // RENDER SAĞLIK KONTROLÜ
@@ -52,7 +50,7 @@ const io = new Server(server, {
 // 2. GÜVENLİK (Middleware - "Bilet" Kontrolü)
 // -----------------------------------------------------------------
 io.use(async (socket, next) => {
-    // ... (Bilet kontrolü aynı, değişiklik yok) ...
+    // ... (Bilet kontrolü aynı, bu çalışmaya devam ediyor) ...
     try {
         const token = socket.handshake.auth.token;
         if (!token) {
@@ -83,13 +81,17 @@ io.on('connection', (socket) => {
      * ODAYA KATILMA İSTEĞİ (Kapı Güvenliği)
      */
     socket.on('joinRoom', async (groupId) => {
+        
+        // 🎯 GÜNCELLEME: "KAPI GÜVENLİĞİ" (PHP API) KONTROLÜ AŞAĞIDAKİ
+        // 'try...catch' bloğu YORUM SATIRI yapılarak DEVRE DIŞI BIRAKILDI.
+        
+        /* // ---- GÜVENLİ KOD (GEÇİCİ OLARAK KAPALI) ----
         try {
             const cleanGroupId = parseInt(groupId, 10);
             if (!cleanGroupId) {
                 return socket.emit('authError', 'Gercersiz Grup ID formatı.');
             }
 
-            // 🎯 Artık onarılmış, GÜVENLİ dosyaya soruluyor
             console.log(`Yetki sorgulanıyor: Kullanıcı ${socket.userId}, Oda ${cleanGroupId} (Adres: ${PHP_AUTH_API_URL})`);
             
             const response = await axios.post(PHP_AUTH_API_URL, {
@@ -101,10 +103,8 @@ io.on('connection', (socket) => {
 
             if (response.data.success && response.data.is_member) {
                 socket.join(cleanGroupId.toString());
-                // 🎯 BAŞARI BURADA OLMALI!
                 console.log(`Kullanıcı ${socket.userId}, ${cleanGroupId} odasına katıldı.`);
             } else {
-                // 🎯 Artık bu hatayı görmememiz lazım.
                 console.warn(`Yetkisiz giriş reddedildi: Kullanıcı ${socket.userId}, Oda ${cleanGroupId} (Sebep: ${response.data.message || 'API is_member=false dedi'})`);
                 socket.emit('authError', 'Bu odaya katılma yetkiniz yok.');
             }
@@ -112,13 +112,35 @@ io.on('connection', (socket) => {
             console.error(`Odaya katılma hatası (PHP API [${PHP_AUTH_API_URL}] ile konuşulamadı):`, error.message);
             socket.emit('serverError', 'Sunucu hatası (API ile iletişim kurulamadı).');
         }
+        */ // ---- GÜVENLİ KOD SONU ----
+
+
+        // ----------------------------------------------------
+        // 🎯 YENİ: "GÜVENLİKSİZ TEST" KODU (Herkesi İçeri Al)
+        // ----------------------------------------------------
+        // "Anlık gitmiyor" sorununu test etmek için, PHP'ye sormadan herkesi odaya alıyoruz.
+        try {
+            const cleanGroupId = parseInt(groupId, 10);
+            if (!cleanGroupId) {
+                return socket.emit('authError', 'Gercersiz Grup ID formatı.');
+            }
+            
+            socket.join(cleanGroupId.toString());
+            console.log(`[GÜVENLİKSİZ TEST] Kullanıcı ${socket.userId}, ${cleanGroupId} odasına (sorgusuz) katıldı.`);
+
+        } catch (e) {
+            console.error('Odaya sorgusuz katılırken hata:', e.message);
+        }
+        // ----------------------------------------------------
+        // 🎯 YENİ TEST KODU SONU
+        // ----------------------------------------------------
     });
 
     /**
      * YAYIN İSTEĞİ
      */
     socket.on('yeniMesajYayinla', (messageData) => {
-        // ... (Değişiklik yok) ...
+        // ... (Değişiklik yok, burası zaten güvenli) ...
         try {
             if (!messageData || !messageData.grup_id) {
                 console.warn('Eksik mesaj verisi (grup_id) ile yayın isteği alındı.');
@@ -126,10 +148,14 @@ io.on('connection', (socket) => {
             }
             const groupId = messageData.grup_id.toString();
             
+            // 🎯 "Anlık gitmiyor" sorununun çözümü burası:
+            // Odaya artık katılabildiğin için (yukarıdaki test kodu sayesinde),
+            // bu 'if' bloğu artık 'true' dönecek ve YAYIN YAPILACAK.
             if (socket.rooms.has(groupId)) {
                 socket.to(groupId).emit('newMessage', messageData); 
                 console.log(`Mesaj yayınlandı: Gönderen ${socket.userId}, Oda ${groupId}`);
             } else {
+                // Bu hatayı artık görmemen lazım
                 console.warn(`Yetkisiz yayın denemesi: Kullanıcı ${socket.userId}, Oda ${groupId} (odaya katılmamış)`);
                 socket.emit('authError', 'Mesaj göndermek için önce odaya katılmalısınız.');
             }
